@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="ipstyle.css" />
+    <title>حاسبة الشبكات الفرعية</title>
+    <style></style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>حاسبة الشبكات الفرعية لـ IPv4</h1>
+      <form id="subnetForm">
+        <label for="originalIp">عنوان IP الأصلي:</label>
+        <input
+          type="text"
+          id="originalIp"
+          name="originalIp"
+          placeholder="192.168.1.0"
+          required
+        />
+
+        <label for="originalCidr">CIDR الأصلي:</label>
+        <input
+          type="number"
+          id="originalCidr"
+          name="originalCidr"
+          min="0"
+          max="32"
+          required
+        />
+
+        <label for="newCidr">CIDR الجديد:</label>
+        <input
+          type="number"
+          id="newCidr"
+          name="newCidr"
+          min="0"
+          max="32"
+          required
+        />
+
+        <button type="submit">احسب الشبكات الفرعية</button>
+      </form>
+
+      <div id="result"></div>
+    </div>
+
+    <script>
+      function ipToBinary(ip) {
+        return ip
+          .split(".")
+          .map(function (octet) {
+            return ("00000000" + parseInt(octet, 10).toString(2)).slice(-8);
+          })
+          .join("");
+      }
+
+      function binaryToIp(binary) {
+        return binary
+          .match(/.{1,8}/g)
+          .map(function (bin) {
+            return parseInt(bin, 2);
+          })
+          .join(".");
+      }
+
+      function calculateSubnet(ip, cidr) {
+        let ipBinary = ipToBinary(ip);
+        let maskBinary = "1".repeat(cidr) + "0".repeat(32 - cidr);
+
+        let networkBinary = ipBinary
+          .split("")
+          .map((bit, i) => bit & maskBinary[i])
+          .join("");
+        let broadcastBinary =
+          networkBinary.substring(0, cidr) + "1".repeat(32 - cidr);
+
+        let networkAddress = binaryToIp(networkBinary);
+        let broadcastAddress = binaryToIp(broadcastBinary);
+
+        let firstIp = binaryToIp(networkBinary.substring(0, 31) + "1");
+        let lastIp = binaryToIp(broadcastBinary.substring(0, 31) + "0");
+
+        return {
+          networkAddress,
+          broadcastAddress,
+          ipRange: [firstIp, lastIp],
+        };
+      }
+
+      function calculateSubnetMask(cidr) {
+        let maskBits = "1".repeat(cidr) + "0".repeat(32 - cidr);
+        let maskOctets = maskBits
+          .match(/.{1,8}/g)
+          .map((bin) => parseInt(bin, 2));
+        return maskOctets.join(".");
+      }
+
+      function calculateSubnets(originalIp, originalCidr, newCidr) {
+        if (newCidr <= originalCidr) {
+          return "يجب أن يكون CIDR الجديد أكبر من CIDR الأصلي.";
+        }
+
+        let subnets = [];
+        let numberOfSubnets = Math.pow(2, newCidr - originalCidr);
+
+        for (let i = 0; i < numberOfSubnets; i++) {
+          let subnetIpBinary =
+            ipToBinary(originalIp).substring(0, originalCidr) +
+            ("00000000000000000000000000000000" + i.toString(2)).slice(
+              -1 * (newCidr - originalCidr)
+            ) +
+            "0".repeat(32 - newCidr);
+
+          let subnetIp = binaryToIp(subnetIpBinary);
+          let subnetInfo = calculateSubnet(subnetIp, newCidr);
+          subnets.push(subnetInfo);
+        }
+
+        return subnets;
+      }
+
+      document
+        .getElementById("subnetForm")
+        .addEventListener("submit", function (e) {
+          e.preventDefault();
+
+          let originalIp = document.getElementById("originalIp").value;
+          let originalCidr = parseInt(
+            document.getElementById("originalCidr").value
+          );
+          let newCidr = parseInt(document.getElementById("newCidr").value);
+          let resultDiv = document.getElementById("result");
+
+          let subnets = calculateSubnets(originalIp, originalCidr, newCidr);
+          let resultHTML = "";
+
+          if (Array.isArray(subnets)) {
+            resultHTML +=
+              "<table><tr><th>الشبكة الفرعية</th><th>عنوان الشبكة</th><th>عنوان البث</th><th>نطاق الـ IP</th><th>قناع الشبكة</th></tr>";
+            subnets.forEach((subnet, index) => {
+              let subnetMask = calculateSubnetMask(newCidr);
+              resultHTML += `<tr><td>${index + 1}</td><td>${
+                subnet.networkAddress
+              }</td><td>${
+                subnet.broadcastAddress
+              }</td><td>${subnet.ipRange.join(
+                " - "
+              )}</td><td>${subnetMask}</td></tr>`;
+            });
+            resultHTML += "</table>";
+          } else {
+            resultHTML = `<p>${subnets}</p>`;
+          }
+
+          resultDiv.innerHTML = resultHTML;
+        });
+    </script>
+  </body>
+</html>
